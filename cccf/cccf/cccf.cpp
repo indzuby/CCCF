@@ -3,19 +3,20 @@
 #include <string>
 #include <random>
 #include <vector>
+#include <stdlib.h>
+#include <time.h>
+#pragma warning(disable:4996)
 
 class Rating{
 private:
 	int user;
 	int item;
-	int rating;
-	int timestamp;
+	double rating;
 public:
-	Rating(int _user, int _item, int _rating ,int _timestamp) {
+	Rating(int _user, int _item, double _rating) {
 		user = _user;
 		item = _item;
 		rating = _rating;
-		timestamp = _timestamp;
 	}
 	int getUser() {
 		return user;
@@ -23,10 +24,10 @@ public:
 	int getItem() {
 		return item;
 	}
-	int getRating() {
+	double getRating() {
 		return rating;
 	}
-	void setRating(int _rating) {
+	void setRating(double _rating) {
 		rating = _rating;
 	}
 };
@@ -189,18 +190,19 @@ double ziuk[ITEM + 1][USER + 1][K + 1];
 void generativeCCCF(vector<Rating> O, vector<Rating> O_prime) {
 	random_device rd;
 	mt19937 gen(rd());
-	beta<> beta(alphak1, alphak2);
+	beta<> beta(alphak1, alphak2), betak(beta1,beta2);
 	bernoulli_distribution d;
 	for (int i = 1; i <= K; i++) {
 		for (int j = 1; j <= USER; j++)
 			pi1[j][i] = beta(gen);
 		for (int j = 1; j <= ITEM; j++)
 			pi2[j][i] = beta(gen);
-		theta[i] = beta(gen);
+		theta[i] = betak(gen);
 	}
 	vector<Rating> merge = O;
 	merge.insert(merge.end(), O_prime.begin(), O_prime.end());
 	for (Rating r : merge) {
+		double sum = 0;
 		for (int i = 1; i <= K; i++) {
 			d = bernoulli_distribution(pi1[r.getUser()][i]);
 			zuik[r.getUser()][r.getItem()][i] = d(gen);
@@ -209,38 +211,89 @@ void generativeCCCF(vector<Rating> O, vector<Rating> O_prime) {
 			zuik[r.getItem()][r.getUser()][i] = d(gen);
 
 
-			if (zuik[r.getUser()][r.getItem()][i] && zuik[r.getItem()][r.getUser()][i]) 
+			if (zuik[r.getUser()][r.getItem()][i] == 1 && zuik[r.getItem()][r.getUser()][i] == 1) {
 				puik[r.getUser()][r.getItem()][i] = theta[i];
-			else 
+				sum += (1 - puik[r.getUser()][r.getItem()][i]);
+			}
+			else
 				puik[r.getUser()][r.getItem()][i] = 0;
-
+		}
+		pui[r.getUser()][r.getItem()] = 1 - sum;
+		d = bernoulli_distribution(pui[r.getUser()][r.getItem()]);
+		y[r.getUser()][r.getItem()] = d(gen);
+		r.setRating(y[r.getUser()][r.getItem()]);
+	}
+}
+void inferenceCCCF(vector<Rating> O, vector<Rating> O_prime) {
+		
+	int index = 1;
+	srand(time(NULL));
+	for (int i = 1; i <= K; i++)
+		theta[i] = 1;
+	for (int t = 0; t < 100; t++) {
+		vector<Rating> merge = O;
+		int size = O_prime.size();
+		for (int i = 0;i<100 &&  index < size; index++,i++) {
+			merge.push_back(O_prime[index]);
+		}
+		for (Rating rating : merge) {
+			for (int k = 1; k <= K; k++) {
+					// equation 7
+			}
+		}
+		for (int tau = 0; tau < 100; tau++) { //converged check 
+			for (int k = 1; k <= K; k++) {
+				//equation 8
+			}
 		}
 	}
 	for (int i = 1; i <= USER; i++) {
-		for (int j = 1; j <= ITEM; j++) {
-			double sum = 0;
-			for (int k = 1; k <= K; k++)
-				sum += (1 - puik[i][j][k]);
-			pui[i][j] = 1 - sum;
-			d = bernoulli_distribution(pui[i][j]);
-			y[i][j] = d(gen);
+		double sum = 0;
+		int cnt = 0;
+		for (int k = 1; k <= K; k++) {
+			for (int j = 1; j <= ITEM; j++) {
+				sum += zuik[i][j][k];
+				if (zuik[i][j][k] > 0) cnt++;
+			}
+			pi1[i][k] = (sum + alphak1) / (cnt + alphak1 + alphak2);		//equation 9
+		}
+	}
+	for (int i = 1; i <= ITEM; i++) {
+		double sum = 0;
+		int cnt = 0;
+		for (int k = 1; k <= K; k++) {
+			for (int j = 1; j <= USER; j++) {
+				sum += ziuk[i][j][k];
+				if (ziuk[i][j][k] > 0) cnt++;
+			}
+			pi2[i][k] = (sum + alphak1) / (cnt + alphak1 + alphak2);		//equation 10
 		}
 	}
 }
 
 
+void input() {
+	FILE * in = fopen("u.data", "r");
 
-int main() {
-	random_device rd;
-	mt19937 gen(rd());
-	beta<> beta(2, 2);
-	bernoulli_distribution d;
-	for (int i = 0; i < 100; i++) {
-		double p = beta(gen);
-		cout <<"beta : "<< p << endl;
-		d = bernoulli_distribution(p);
-		cout << "bernoulli : " << d(gen) << endl;
+	while (!feof(in)) {
+		int user, item,rating,timestamp;
+		fscanf(in, "%d %d %d %d", &user, &item, &rating, &timestamp);
+		rating_list.push_back(Rating(user, item, rating/5.0));				// scale rating 0 ~ 1
+		y[user][item] = rating / 5.0;
 	}
 
+	for (int i = 1; i <= USER; i++) {
+		for(int j = 1; j<=ITEM;j++)
+			if (y[i][j] <= 0) {
+				missing_list.push_back(Rating(i, j, 0.0));
+			}
+	}
+
+	fclose(in);
+}
+
+int main() {
+	input();
+	generativeCCCF(rating_list,missing_list);
 	return 0;
 }

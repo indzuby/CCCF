@@ -148,6 +148,9 @@
   <ItemGroup>
     <ClCompile Include="cccf.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="u.data" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
